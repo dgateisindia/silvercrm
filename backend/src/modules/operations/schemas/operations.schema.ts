@@ -1,0 +1,15 @@
+import { AppError } from "../../../core/errors/AppError";
+import { id, obj, scaled, decimal } from "../../sales/schemas/sales.schema";
+import { money } from "../../finance/schemas/finance.schema";
+const bad=():never=>{throw AppError.badRequest();};
+function text(value:unknown,max:number):string {if(typeof value!=="string"||!value.trim()||value.trim().length>max||/[\x00-\x08\x0B\x0E-\x1F]/.test(value))return bad();return value.trim();}
+export function date(value:unknown):string {if(typeof value!=="string"||!/^\d{4}-\d\d-\d\d$/.test(value))return bad();const d=new Date(value+"T00:00:00.000Z");if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==value)return bad();return value;}
+export function creditBody(raw:unknown){const v=obj(raw,["amount","reason","expectedBalance","idempotencyKey"]);const amount=money(v.amount,true),expectedBalance=money(v.expectedBalance);const reason=text(v.reason,500),key=text(v.idempotencyKey,100);if(!/^[A-Za-z0-9_-]{12,100}$/.test(key)||scaled(amount,2)>scaled(expectedBalance,2))return bad();return {amount,reason,expectedBalance,key};}
+export function refundBody(raw:unknown){const v=obj(raw,["amount","reason","expectedAvailable"]);const amount=money(v.amount,true),expectedAvailable=money(v.expectedAvailable);if(scaled(amount,2)>scaled(expectedAvailable,2))return bad();return {amount,reason:text(v.reason,500),expectedAvailable};}
+export function scheduleBody(raw:unknown){const v=obj(raw,["items"]);if(!Array.isArray(v.items)||v.items.length<1||v.items.length>24)return bad();const items=v.items.map(item=>{const r=obj(item,["dueOn","amount"]);return {dueOn:date(r.dueOn),amount:money(r.amount,true)};});if(new Set(items.map(i=>i.dueOn)).size!==items.length)return bad();return {items:items.sort((a,b)=>a.dueOn.localeCompare(b.dueOn))};}
+export function targetBody(raw:unknown){const v=obj(raw,["userId","startsOn","endsOn","amount"]);const startsOn=date(v.startsOn),endsOn=date(v.endsOn);if(endsOn<startsOn||(Date.parse(endsOn)-Date.parse(startsOn))/86400000>370)return bad();return {userId:id(v.userId),startsOn,endsOn,amount:money(v.amount)};}
+export function adjustmentBody(raw:unknown){const v=obj(raw,["delta","reason","expectedEffective"]);let delta:string;if(typeof v.delta!=="string"||!/^[-]?(?:0|[1-9]\d{0,15})(?:\.\d{1,2})?$/.test(v.delta))return bad();delta=v.delta; if(scaled(delta.replace(/^-/,'')||'0',2)===0n)return bad();return {delta,reason:text(v.reason,350),expectedEffective:money(v.expectedEffective)};}
+export function reportDates(from:unknown,to:unknown){const f=date(from),t=date(to);if(f>t||(Date.parse(t)-Date.parse(f))/86400000>366)return bad();return {from:f,to:t};}
+export function reportFormat(raw:unknown):"json"|"csv" {if(raw===undefined||raw==="json")return "json";if(raw==="csv")return "csv";return bad();}
+export function taskId(raw:unknown){return id(raw);}
+export function sqlMoney(input:bigint):string {if(input<0n)return bad();return decimal(input,2);}
