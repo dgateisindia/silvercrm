@@ -1,0 +1,38 @@
+.temp-login-page{min-height:100vh;display:grid;grid-template-columns:minmax(500px,1.05fr) minmax(350px,.95fr);background:#f8f8f9;font-family:Inter,system-ui,sans-serif;color:#171825}
+.temp-login-card{max-width:550px;width:calc(100% - 64px);align-self:center;justify-self:center;padding:55px 0}
+.temp-login-brand{display:flex;align-items:center;gap:10px;color:#000080;font-weight:800;font-size:12px;letter-spacing:1.3px}
+.temp-login-mark{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#ff9c00;color:#101127;font-size:21px;letter-spacing:0}
+.temp-login-badge{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;margin-top:48px;background:#fbf5e0;border-radius:7px;color:#815300;font-size:10px;font-weight:800;letter-spacing:1px}
+.temp-login-card h1{font-size:clamp(25px,3vw,38px);line-height:1.16;letter-spacing:-.04em;margin:21px 0 13px;color:#161622}
+.temp-login-intro{color:#686976;line-height:1.8;font-size:14px;margin:0 0 32px;max-width:440px}
+.temp-login-roles{border:0;margin:0 0 25px;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.temp-login-roles legend{font-size:12px;font-weight:800;margin-bottom:12px;color:#292b36}
+.temp-login-role{display:flex;gap:8px;min-height:85px;padding:12px 10px;background:white;border:1.5px solid #e7e7ed;border-radius:11px;cursor:pointer;transition:border-color .15s,background .15s}
+.temp-login-role.is-selected{border-color:#ff9c00;background:#fffaf1}
+.temp-login-role input{accent-color:#ff9c00;align-self:flex-start;margin-top:2px}
+.temp-login-role-content{display:flex;flex-direction:column;gap:6px}
+.temp-login-role strong{font-size:12px;line-height:1.3;color:#222234}
+.temp-login-role small{color:#83838d;font-size:10px;line-height:1.45}
+.temp-login-token-label{display:flex;gap:8px;align-items:center;font-size:12px;font-weight:750;margin-bottom:11px;color:#262637}
+.temp-login-token-input{width:100%;box-sizing:border-box;border:1.5px solid #e1e1e8;border-radius:10px;background:white;padding:15px 17px;color:#242433;font-size:13px;outline:none}
+.temp-login-token-input:focus{border-color:#ff9c00;box-shadow:0 0 0 3px rgba(255,156,0,.15)}
+.temp-login-error{color:#b33434;font-size:12px;margin:12px 0}
+.temp-login-submit{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;border:0;border-radius:10px;background:#ff9c00;color:#171725;font-weight:800;font-size:13px;padding:16px 12px;margin-top:15px;cursor:pointer}
+.temp-login-submit:hover:not(:disabled){background:#e88e00}
+.temp-login-submit:disabled{opacity:.55;cursor:not-allowed}
+.temp-login-footer{font-size:11px;color:#8a8a96;line-height:1.7;margin-top:24px}
+.temp-login-information{display:flex;flex-direction:column;justify-content:center;padding:8%;background:#000080;color:white;min-height:100vh;box-sizing:border-box;position:relative;overflow:hidden}
+.temp-login-information::after{content:'';position:absolute;border-radius:50%;width:350px;height:350px;border:65px solid rgba(255,156,0,.1);right:-175px;bottom:-120px;pointer-events:none}
+.temp-login-information-mark{font-size:38px;font-weight:850;letter-spacing:-.1em;color:#ff9c00;margin-bottom:50px}
+.temp-login-overline{font-size:12px;letter-spacing:2px;font-weight:800;color:#ffba4a;margin:0 0 13px}
+.temp-login-information h2{font-size:clamp(28px,3.3vw,46px);line-height:1.13;letter-spacing:-.04em;max-width:430px;margin:0 0 18px}
+.temp-login-information>p:not(.temp-login-overline){font-size:14px;line-height:1.8;color:#d9daf8;max-width:420px}
+.temp-login-information-note{font-size:12px;color:#edeefd;line-height:1.8;max-width:430px;border-left:3px solid #ff9c00;padding:12px 17px;margin-top:34px;background:rgba(255,255,255,.06)}
+.temp-auth-workspace{min-height:100vh}
+.temp-auth-session{position:fixed;right:17px;bottom:17px;z-index:1000;display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #e4e3eb;box-shadow:0 10px 45px rgba(0,0,0,.15);border-radius:12px;padding:10px 12px;color:#232337;font-size:12px}
+.temp-auth-session-tag{font-size:10px;font-weight:900;color:#9b6200;background:#fff4d8;border-radius:6px;padding:6px 7px}
+.temp-auth-session-role{font-weight:700}
+.temp-auth-signout{display:flex;align-items:center;gap:6px;background:#f6f5f8;color:#28283b;border:1px solid #e1dfe8;border-radius:8px;padding:7px 9px;font-size:11px;font-weight:750;cursor:pointer}
+.temp-auth-signout:hover{background:#eee9e3}
+@media(max-width:950px){.temp-login-page{grid-template-columns:1fr}.temp-login-information{min-height:auto;padding:36px 8% 45px}.temp-login-information-mark{display:none}.temp-login-information h2{font-size:28px}.temp-login-card{padding:55px 0 35px}.temp-login-badge{margin-top:30px}}
+@media(max-width:570px){.temp-login-card{width:calc(100% - 36px)}.temp-login-roles{grid-template-columns:1fr}.temp-login-role{min-height:auto;padding:10px}.temp-auth-session{left:12px;right:12px;bottom:8px;justify-content:space-between;flex-wrap:wrap}}

@@ -1,0 +1,28 @@
+.crm-read-access {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin: 0 0 22px;
+    padding: 18px 20px;
+    border: 1px solid #e8d8ae;
+    border-left: 4px solid #ff9c00;
+    border-radius: 12px;
+    background: #fbf5e0;
+}
+.crm-read-access-copy { min-width: 220px; flex: 1; }
+.crm-read-access-copy strong { color: #000080; font-size: 13px; }
+.crm-read-access-copy p { color: #514d66; font-size: 12px; line-height: 1.55; margin: 6px 0 0; }
+.crm-read-access-action {
+    border: 1px solid #ff9c00;
+    background: #ff9c00;
+    color: #151220;
+    border-radius: 8px;
+    padding: 10px 15px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 750;
+    cursor: pointer;
+}
+.crm-read-access-action:disabled { opacity: .55; cursor: not-allowed; }

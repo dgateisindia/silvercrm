@@ -1,0 +1,19 @@
+.live-leads .live-leads-refresh,
+.live-leads .live-leads-pager button,
+.live-leads .leads-empty button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--color-border, #dedee7);
+    background: #fff;
+    color: var(--color-text-primary, #211f30);
+    border-radius: 9px;
+    padding: 9px 13px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.live-leads button:disabled { opacity: 0.5; cursor: not-allowed; }
+.live-leads .live-leads-note { padding: 4px 24px 12px; font-size: 12px; color: var(--color-text-muted, #74718b); }
+.live-leads .live-leads-pager { display:flex; align-items:center; justify-content:flex-end; gap:15px; padding: 16px 24px; font-size: 12px; }
+.live-leads .leads-empty button { margin-top: 9px; }
