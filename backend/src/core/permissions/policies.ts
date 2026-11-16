@@ -199,6 +199,7 @@ export const PERMISSION_RULES = {
   },
 
   // Company Lead status/priority choices only; not general settings or other picklists.
+  "sales.catalog.manage": { roles: MANAGER, readOnlyAllowed: false },
   "customization.leads.picklists.manage": {
     roles: MANAGEMENT,
     readOnlyAllowed: false,

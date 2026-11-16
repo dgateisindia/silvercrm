@@ -19,12 +19,14 @@ function date(value:unknown):string {
  return value;
 }
 export function revisionBody(input:unknown) {
- const x=obj(input,["expectedRevisionNo","items","validUntil"]);
- const expectedRevisionNo=natural(x.expectedRevisionNo);
- if(!Array.isArray(x.items)||x.items.length<1||x.items.length>25)return bad();
- if(x.validUntil!==undefined&&x.validUntil!==null)date(x.validUntil);
- return {expectedRevisionNo,items:x.items,validUntil:x.validUntil===undefined?null:x.validUntil};
+  const x=obj(input,["expectedRevisionNo","items","validUntil","discountAmount"]);
+  const expectedRevisionNo=natural(x.expectedRevisionNo);
+  if(!Array.isArray(x.items)||x.items.length<1||x.items.length>25)return bad();
+  if(x.validUntil!==undefined&&x.validUntil!==null)date(x.validUntil);
+  if(x.discountAmount!==undefined&&(typeof x.discountAmount!=="string"||!/^(?:0|[1-9]\d{0,15})(?:\.\d{1,2})?$/.test(x.discountAmount)))return bad();
+  return {expectedRevisionNo,items:x.items,validUntil:x.validUntil===undefined?null:x.validUntil,discountAmount:x.discountAmount===undefined?'0.00':x.discountAmount};
 }
+
 export function approvalBody(input:unknown) {
  const x=obj(input,["expectedRevisionNo"]);
  if(Object.keys(x).length!==1)return bad();

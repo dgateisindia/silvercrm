@@ -70,23 +70,51 @@ export function parseStage(value:unknown) {
   return {expectedRevision:v.expectedRevision,stageId:id(v.stageId)};
 }
 export function parseQuote(value:unknown) {
-  const v=obj(value,["dealId","validUntil","items"]);
+  const v=obj(value,["dealId","validUntil","items","discountAmount"]);
   if (!Array.isArray(v.items)||!v.items.length||v.items.length>25) throw AppError.badRequest();
   const items=v.items.map(item=>{
     const row=obj(item,["description","quantity","unitPrice","taxRate"]);
     const quantity=money(row.quantity,3,9);const unitPrice=money(row.unitPrice,2,14);const taxRate=money(row.taxRate,4,3);
     if (scaled(quantity,3)===0n || scaled(taxRate,4)>1000000n) throw AppError.badRequest();
     const net=(scaled(quantity,3)*scaled(unitPrice,2)+500n)/1000n;
-    const tax=(net*scaled(taxRate,4)+500000n)/1000000n;
-    if (net>999999999999999999n || tax>999999999999999999n) throw AppError.badRequest();
-    return {description:text(row.description,250),quantity,unitPrice,taxRate,net,tax};
+    if (net>999999999999999999n) throw AppError.badRequest();
+    return {description:text(row.description,250),quantity,unitPrice,taxRate,net};
   });
-  const subtotal=items.reduce((a,b)=>a+b.net,0n);const taxes=items.reduce((a,b)=>a+b.tax,0n);
-  if (subtotal+taxes>999999999999999999n) throw AppError.badRequest();
-  return {dealId:id(v.dealId),validUntil:optionalDate(v.validUntil),items,subtotal:decimal(subtotal,2),taxes:decimal(taxes,2),grandTotal:decimal(subtotal+taxes,2)};
+  const subtotal=items.reduce((a,b)=>a+b.net,0n);
+  const discountAmount=v.discountAmount===undefined?'0.00':money(v.discountAmount,2);
+  const discount=scaled(discountAmount,2);
+  if (discount>subtotal) throw AppError.badRequest();
+  // Proportionally apportion a quotation-level discount to taxable items, to the exact cent.
+  const distributed=items.map(row=>subtotal===0n?0n:(discount*row.net)/subtotal);
+  const candidates=items.map((row,index)=>({index,part:subtotal===0n?0n:(discount*row.net)%subtotal}));
+  candidates.sort((a,b)=>a.part===b.part?a.index-b.index:a.part>b.part?-1:1);
+  let remaining=discount-distributed.reduce((sum,x)=>sum+x,0n);
+  for (const c of candidates){if(remaining===0n)break;const portion=distributed[c.index],item=items[c.index];if(portion!==undefined&&item&&portion<item.net){distributed[c.index]=portion+1n;remaining-=1n;}}
+  if(remaining!==0n)throw AppError.badRequest();
+  const adjusted=items.map((row,index)=>{
+    const taxable=row.net-distributed[index]!;
+    const tax=(taxable*scaled(row.taxRate,4)+500000n)/1000000n;
+    if(tax>999999999999999999n)throw AppError.badRequest();
+    return {...row,tax};
+  });
+  const taxes=adjusted.reduce((sum,row)=>sum+row.tax,0n);
+  if(subtotal>999999999999999999n||taxes>999999999999999999n||subtotal-discount+taxes>999999999999999999n)throw AppError.badRequest();
+  return {dealId:id(v.dealId),validUntil:optionalDate(v.validUntil),items:adjusted,
+    subtotal:decimal(subtotal,2),discountAmount:decimal(discount,2),taxes:decimal(taxes,2),grandTotal:decimal(subtotal-discount+taxes,2)};
 }
+
 export function limit(input:unknown):number {
   if (input===undefined) return 30;
   if (typeof input!=="string" || !/^[1-9]\d{0,2}$/.test(input) || Number(input)>100) throw AppError.badRequest();
   return Number(input);
 }
+
+/** The customer-supplied number/date; amount and role scope are never accepted from the browser. */
+export function parseCustomerPurchaseOrder(value:unknown){
+ const v=obj(value,['quotationId','customerPoNumber','customerPoDate']);
+ const customerPoDate=optionalDate(v.customerPoDate);
+ if(customerPoDate===null)throw AppError.badRequest();
+ return {quotationId:id(v.quotationId),customerPoNumber:text(v.customerPoNumber,100),customerPoDate};
+}
+export function parseCustomerPurchaseOrderId(value:unknown):string{return id(value);}
+export function parseCustomerPurchaseOrderCursor(value:unknown):string|null{return value===undefined||value===null?null:id(value);}

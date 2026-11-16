@@ -36,9 +36,9 @@ export async function reviseQuote(db:Db,t:TenantContext,quoteId:string,input:Ret
  if(q.status!=="draft")throw AppError.conflict();
  const last=await newest(db,t,quoteId,true);
  if(last.revision_no!==input.expectedRevisionNo)throw AppError.conflict();
- const parsed=parseQuote({dealId:q.dealId,validUntil:input.validUntil,items:input.items});
+ const parsed=parseQuote({dealId:q.dealId,validUntil:input.validUntil,items:input.items,discountAmount:input.discountAmount});
  const next=last.revision_no+1;
- const [created]=await db.execute<ResultSetHeader>(`INSERT INTO crm_quotation_revisions(company_id,quotation_id,revision_no,subtotal,discount_total,tax_total,grand_total,status,created_by_id) VALUES(?,?,?, ?,0,?,?,'draft',?)`,[t.companyId,quoteId,next,parsed.subtotal,parsed.taxes,parsed.grandTotal,t.actorUserId]);
+ const [created]=await db.execute<ResultSetHeader>(`INSERT INTO crm_quotation_revisions(company_id,quotation_id,revision_no,subtotal,discount_total,tax_total,grand_total,status,created_by_id) VALUES(?,?,?,?,?,?,?,'draft',?)`,[t.companyId,quoteId,next,parsed.subtotal,parsed.discountAmount,parsed.taxes,parsed.grandTotal,t.actorUserId]);
  const revId=dbId(created.insertId);
  for(const item of parsed.items){await db.execute(`INSERT INTO crm_quotation_items(company_id,revision_id,description,quantity,unit_price,tax_rate,line_total) VALUES(?,?,?,?,?,?,?)`,[t.companyId,revId,item.description,item.quantity,item.unitPrice,item.taxRate,decimal(item.net,2)]);}
  await db.execute(`UPDATE crm_quotations SET valid_until=? WHERE company_id=? AND id=?`,[parsed.validUntil,t.companyId,quoteId]);

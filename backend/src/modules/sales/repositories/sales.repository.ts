@@ -69,10 +69,13 @@ export async function createDeal(db:Db,t:TenantContext,v:ReturnType<typeof impor
  await audit(db,t,"deal.created","deal",dealId,{leadId:v.leadId,pipelineId:v.pipelineId},rid);
  return {id:dealId,ownerUserId:lead.ownerUserId,pipelineId:v.pipelineId,stageId:v.stageId};
 }
+/** STEP13Y3_CUSTOMER_ACCOUNT_PROJECTION: Authorized deal or its linked lead account. */
 export async function listDeals(db:Db,t:TenantContext,n:number) {
  const sc=ownerClause(t,"d");
- const [rows]=await db.execute<RowDataPacket[]>(`SELECT d.id,d.title,d.expected_amount,d.currency,d.owner_user_id,d.pipeline_id,d.stage_id,s.name AS stage_name,s.stage_type FROM deals d JOIN pipeline_stages s ON s.company_id=d.company_id AND s.pipeline_id=d.pipeline_id AND s.id=d.stage_id WHERE d.company_id=? AND ${sc.sql} ORDER BY d.id DESC LIMIT ?`,[t.companyId,...sc.args,n]);
- return rows.map(r=>({id:dbId(r.id),title:r.title,amount:String(r.expected_amount),currency:r.currency,ownerUserId:dbId(r.owner_user_id),pipelineId:dbId(r.pipeline_id),stageId:dbId(r.stage_id),stageName:r.stage_name,stageType:r.stage_type}));
+ const [rows]=await db.execute<RowDataPacket[]>(`SELECT d.id,COALESCE(d.account_id,l.account_id,dc.account_id,lc.account_id) AS account_id,d.contact_id,d.lead_id,d.title,d.expected_amount,d.currency,d.owner_user_id,d.pipeline_id,d.stage_id,s.name AS stage_name,s.stage_type FROM deals d LEFT JOIN leads l ON l.company_id=d.company_id AND l.id=d.lead_id
+ LEFT JOIN contacts dc ON dc.company_id=d.company_id AND dc.id=d.contact_id
+ LEFT JOIN contacts lc ON lc.company_id=l.company_id AND lc.id=l.contact_id JOIN pipeline_stages s ON s.company_id=d.company_id AND s.pipeline_id=d.pipeline_id AND s.id=d.stage_id WHERE d.company_id=? AND ${sc.sql} ORDER BY d.id DESC LIMIT ?`,[t.companyId,...sc.args,n]);
+ return rows.map(r=>({id:dbId(r.id),accountId:r.account_id==null?null:dbId(r.account_id),contactId:r.contact_id==null?null:dbId(r.contact_id),leadId:r.lead_id==null?null:dbId(r.lead_id),title:r.title,amount:String(r.expected_amount),currency:r.currency,ownerUserId:dbId(r.owner_user_id),pipelineId:dbId(r.pipeline_id),stageId:dbId(r.stage_id),stageName:r.stage_name,stageType:r.stage_type}));
 }
 export async function updateStage(db:Db,t:TenantContext,dealId:string,v:ReturnType<typeof import("../schemas/sales.schema").parseStage>,rid:string|null) {
  const before=await visibleDeal(db,t,dealId,true);
@@ -92,7 +95,7 @@ export async function createQuote(db:Db,t:TenantContext,v:ReturnType<typeof impo
  const quoteNo=`Q-${randomUUID().replace(/-/g,"").slice(0,24)}`;
  const [created]=await db.execute<ResultSetHeader>(`INSERT INTO crm_quotations(company_id,quote_no,deal_id,created_by_id,status,currency,valid_until) VALUES(?,?,?,?,'draft',?,?)`,[t.companyId,quoteNo,v.dealId,t.actorUserId,deal.currency??"INR",v.validUntil]);
  const quoteId=dbId(created.insertId);
- const [revision]=await db.execute<ResultSetHeader>(`INSERT INTO crm_quotation_revisions(company_id,quotation_id,revision_no,subtotal,discount_total,tax_total,grand_total,status,created_by_id) VALUES(?,?,1,?,0,?,?,'draft',?)`,[t.companyId,quoteId,v.subtotal,v.taxes,v.grandTotal,t.actorUserId]);
+ const [revision]=await db.execute<ResultSetHeader>(`INSERT INTO crm_quotation_revisions(company_id,quotation_id,revision_no,subtotal,discount_total,tax_total,grand_total,status,created_by_id) VALUES(?,?,1,?,?,?,?,'draft',?)`,[t.companyId,quoteId,v.subtotal,v.discountAmount,v.taxes,v.grandTotal,t.actorUserId]);
  const revisionId=dbId(revision.insertId);
  for(const line of v.items){
   await db.execute(`INSERT INTO crm_quotation_items(company_id,revision_id,description,quantity,unit_price,tax_rate,line_total) VALUES(?,?,?,?,?,?,?)`,[t.companyId,revisionId,line.description,line.quantity,line.unitPrice,line.taxRate,decimal(line.net,2)]);
@@ -107,10 +110,145 @@ export async function getQuote(db:Db,t:TenantContext,quoteId:string){
  const [revisions]=await db.execute<RowDataPacket[]>(`SELECT id,revision_no,subtotal,discount_total,tax_total,grand_total,status FROM crm_quotation_revisions WHERE company_id=? AND quotation_id=? ORDER BY revision_no DESC LIMIT 1`,[t.companyId,quoteId]);
  const rev=revisions[0];if(!rev)throw AppError.notFound();
  const [items]=await db.execute<RowDataPacket[]>(`SELECT description,quantity,unit_price,tax_rate,line_total FROM crm_quotation_items WHERE company_id=? AND revision_id=? ORDER BY id LIMIT 50`,[t.companyId,dbId(rev.id)]);
- return {id:quoteId,quoteNo:quote.quote_no,dealId:dbId(quote.deal_id),status:quote.status,currency:quote.currency,validUntil:quote.valid_until,revisionNo:rev.revision_no,subtotal:String(rev.subtotal),taxTotal:String(rev.tax_total),grandTotal:String(rev.grand_total),items:items.map(x=>({description:x.description,quantity:String(x.quantity),unitPrice:String(x.unit_price),taxRate:String(x.tax_rate),lineTotal:String(x.line_total)}))};
+ return {id:quoteId,quoteNo:quote.quote_no,dealId:dbId(quote.deal_id),status:quote.status,currency:quote.currency,validUntil:quote.valid_until,revisionNo:rev.revision_no,subtotal:String(rev.subtotal),discountTotal:String(rev.discount_total),taxTotal:String(rev.tax_total),grandTotal:String(rev.grand_total),items:items.map(x=>({description:x.description,quantity:String(x.quantity),unitPrice:String(x.unit_price),taxRate:String(x.tax_rate),lineTotal:String(x.line_total)}))};
 }
 export async function pipelineInsights(db:Db,t:TenantContext){
  const sc=ownerClause(t,"d");
  const [rows]=await db.execute<RowDataPacket[]>(`SELECT d.pipeline_id,d.stage_id,s.name,s.stage_type,COUNT(*) AS total,CAST(SUM(d.expected_amount) AS CHAR) AS amount FROM deals d JOIN pipeline_stages s ON s.company_id=d.company_id AND s.pipeline_id=d.pipeline_id AND s.id=d.stage_id WHERE d.company_id=? AND ${sc.sql} GROUP BY d.pipeline_id,d.stage_id,s.name,s.stage_type ORDER BY d.pipeline_id,s.position LIMIT 500`,[t.companyId,...sc.args]);
  return rows.map(x=>({pipelineId:dbId(x.pipeline_id),stageId:dbId(x.stage_id),stageName:x.name,stageType:x.stage_type,count:Number(x.total),expectedAmount:String(x.amount)}));
+}
+
+/** Paged persisted quotations, scoped identically to the existing Deals list. No writes. */
+/** STEP13Y4_LINK_ACCOUNT: Explicit, audited Manager-only linkage of an unlinked Deal. */
+export async function linkDealToCustomerAccount(db:Db,t:TenantContext,dealId:string,accountId:string,rid:string|null) {
+  if(t.role!=="MANAGER"||t.accessMode!=="FULL")throw AppError.forbidden();
+  // Reuse the established deal/team visibility rule and obtain the transaction lock.
+  await visibleDeal(db,t,dealId,true);
+  const [accounts]=await db.execute<RowDataPacket[]>(
+    `SELECT id,status FROM accounts WHERE company_id=? AND id=? LIMIT 1`,
+    [t.companyId,accountId]);
+  const account=accounts[0];
+  if(!account||String(account.status).toLowerCase()!=="active")throw AppError.notFound();
+  const [relationships]=await db.execute<RowDataPacket[]>(
+    `SELECT d.account_id AS deal_account_id,
+      l.account_id AS lead_account_id, dc.account_id AS deal_contact_account_id,
+      lc.account_id AS lead_contact_account_id
+      FROM deals d
+      LEFT JOIN leads l ON l.company_id=d.company_id AND l.id=d.lead_id
+      LEFT JOIN contacts dc ON dc.company_id=d.company_id AND dc.id=d.contact_id
+      LEFT JOIN contacts lc ON lc.company_id=l.company_id AND lc.id=l.contact_id
+      WHERE d.company_id=? AND d.id=? LIMIT 1 FOR UPDATE`,
+    [t.companyId,dealId]);
+  const found=relationships[0];
+  if(!found)throw AppError.notFound();
+  // Reject a conflicting customer reference instead of silently reassigning history.
+  for(const key of ["deal_account_id","lead_account_id","deal_contact_account_id","lead_contact_account_id"]){
+    const linked=found[key];
+    if(linked!==null&&linked!==undefined&&dbId(linked)!==accountId)throw AppError.conflict();
+  }
+  if(found.deal_account_id!==null&&found.deal_account_id!==undefined){
+    return {dealId,accountId,status:"already_linked"};
+  }
+  const [changed]=await db.execute<ResultSetHeader>(
+    `UPDATE deals SET account_id=? WHERE company_id=? AND id=? AND account_id IS NULL`,
+    [accountId,t.companyId,dealId]);
+  if(changed.affectedRows!==1)throw AppError.conflict();
+  await audit(db,t,"deal.customer_account_linked","deal",dealId,{accountId},rid);
+  return {dealId,accountId,status:"linked"};
+}
+
+export async function listQuotationSummaries(db:Db,t:TenantContext,n:number,before:string|null){
+ const sc=ownerClause(t,"d");
+ const [rows]=await db.execute<RowDataPacket[]>(`SELECT q.id,q.quote_no,q.deal_id,q.status,q.currency,q.valid_until,
+ DATE_FORMAT(q.created_at,'%Y-%m-%dT%H:%i:%s.%f') AS created_at,
+ d.title AS deal_title, COALESCE(d.account_id,l.account_id,dc.account_id,lc.account_id) AS customer_account_id, rev.revision_no, CAST(rev.grand_total AS CHAR) AS grand_total
+ FROM crm_quotations q
+ JOIN deals d ON d.company_id=q.company_id AND d.id=q.deal_id
+ LEFT JOIN leads l ON l.company_id=d.company_id AND l.id=d.lead_id
+ LEFT JOIN contacts dc ON dc.company_id=d.company_id AND dc.id=d.contact_id
+ LEFT JOIN contacts lc ON lc.company_id=l.company_id AND lc.id=l.contact_id
+ LEFT JOIN crm_quotation_revisions rev ON rev.company_id=q.company_id AND rev.quotation_id=q.id
+ AND rev.revision_no=(SELECT MAX(r2.revision_no) FROM crm_quotation_revisions r2
+ WHERE r2.company_id=q.company_id AND r2.quotation_id=q.id)
+ WHERE q.company_id=? AND ${sc.sql} ${before?'AND q.id < ?':''}
+ ORDER BY q.id DESC LIMIT ?`,[t.companyId,...sc.args,...(before?[before]:[]),n+1]);
+ const page=rows.slice(0,n);
+ const lastPageRow=page[page.length-1];
+ if(page.some(row=>!row.revision_no||row.grand_total===null))throw AppError.conflict();
+ return {items:page.map(row=>({id:dbId(row.id),quoteNo:String(row.quote_no),dealId:dbId(row.deal_id),
+  dealTitle:String(row.deal_title),accountId:row.customer_account_id==null?null:dbId(row.customer_account_id),status:String(row.status),currency:String(row.currency),
+  validUntil:row.valid_until,createdAt:String(row.created_at),
+  revisionNo:Number(row.revision_no),grandTotal:String(row.grand_total)})),
+  nextCursor:rows.length>n && lastPageRow ? dbId(lastPageRow.id) : null};
+}
+
+/** Record a received customer PO against the exact approved quotation revision. */
+export async function createCustomerPurchaseOrder(db:Db,t:TenantContext,input:ReturnType<typeof import('../schemas/sales.schema').parseCustomerPurchaseOrder>,rid:string|null){
+  const [quotes]=await db.execute<RowDataPacket[]>(`SELECT id,deal_id,status,quote_no,currency FROM crm_quotations WHERE company_id=? AND id=? LIMIT 1 FOR UPDATE`,[t.companyId,input.quotationId]);
+  const q=quotes[0];if(!q||!q.deal_id)throw AppError.notFound();
+  await visibleDeal(db,t,dbId(q.deal_id),true);
+  if(q.status!=='approved')throw AppError.conflict();
+  const [revisions]=await db.execute<RowDataPacket[]>(`SELECT id,revision_no,status,subtotal,discount_total,tax_total,grand_total FROM crm_quotation_revisions WHERE company_id=? AND quotation_id=? ORDER BY revision_no DESC LIMIT 1 FOR UPDATE`,[t.companyId,input.quotationId]);
+  const r=revisions[0];if(!r||r.status!=='approved')throw AppError.conflict();
+  const revisionId=dbId(r.id);
+  const [existing]=await db.execute<RowDataPacket[]>(`SELECT id FROM crm_purchase_orders WHERE company_id=? AND quotation_revision_id=? LIMIT 1 FOR UPDATE`,[t.companyId,revisionId]);
+  if(existing.length)throw AppError.conflict();
+  const [dealRows]=await db.execute<RowDataPacket[]>(`SELECT owner_user_id,account_id,contact_id FROM deals WHERE company_id=? AND id=? LIMIT 1 FOR UPDATE`,[t.companyId,dbId(q.deal_id)]);
+  const deal=dealRows[0];if(!deal||!deal.owner_user_id)throw AppError.notFound();
+  const orderNo='CPO-'+randomUUID().replace(/-/g,'').slice(0,24);
+  const [created]=await db.execute<ResultSetHeader>(`INSERT INTO crm_purchase_orders(company_id,order_no,customer_po_number,customer_po_date,received_at,buyer_document_key,quotation_revision_id,contact_id,account_id,owner_user_id,status,currency,order_total) VALUES(?,?,?,?,UTC_TIMESTAMP(3),NULL,?,?,?,?,'received',?,?)`,
+    [t.companyId,orderNo,input.customerPoNumber,input.customerPoDate,revisionId,deal.contact_id??null,deal.account_id??null,deal.owner_user_id,q.currency,String(r.grand_total)]);
+  const orderId=dbId(created.insertId);
+  // Line items preserve original pretax prices; final order total uses the revision's discount + tax.
+  await db.execute(`INSERT INTO crm_purchase_order_items(company_id,order_id,product_id,description,quantity,unit_price,line_total)
+    SELECT ?,?,qi.product_id,qi.description,qi.quantity,qi.unit_price,qi.line_total FROM crm_quotation_items qi
+    WHERE qi.company_id=? AND qi.revision_id=? ORDER BY qi.id`,[t.companyId,orderId,t.companyId,revisionId]);
+  await audit(db,t,'customer_po.recorded','purchase_order',orderId,{quotationId:input.quotationId,revisionNo:r.revision_no,customerPoNumber:input.customerPoNumber},rid);
+  return {id:orderId,orderNo,customerPoNumber:input.customerPoNumber,customerPoDate:input.customerPoDate,
+    quotationId:input.quotationId,revisionNo:Number(r.revision_no),status:'received',currency:String(q.currency),orderTotal:String(r.grand_total)};
+}
+
+/** List uses the existing ownerClause used for Opportunity list; no cross-team disclosure. */
+export async function listCustomerPurchaseOrders(db:Db,t:TenantContext,n:number,before:string|null){
+  const sc=ownerClause(t,'d');
+  const args: Array<string|number>=[t.companyId,...sc.args];
+  const beforeSql=before?' AND po.id < ?':'';
+  if(before)args.push(before);
+  args.push(n+1);
+  const [rows]=await db.execute<RowDataPacket[]>(`SELECT po.id,po.order_no,po.customer_po_number,DATE_FORMAT(po.customer_po_date,'%Y-%m-%d') AS customer_po_date,
+    po.status,po.currency,po.order_total,po.created_at,q.id AS quotation_id,q.quote_no,r.revision_no,d.title AS deal_title
+    FROM crm_purchase_orders po
+    JOIN crm_quotation_revisions r ON r.company_id=po.company_id AND r.id=po.quotation_revision_id
+    JOIN crm_quotations q ON q.company_id=r.company_id AND q.id=r.quotation_id
+    JOIN deals d ON d.company_id=q.company_id AND d.id=q.deal_id
+    WHERE po.company_id=? AND ${sc.sql}${beforeSql} ORDER BY po.id DESC LIMIT ?`,args);
+  const page=rows.slice(0,n),last=page.length?page[page.length-1]:undefined;
+  return {items:page.map(row=>({id:dbId(row.id),orderNo:String(row.order_no),customerPoNumber:String(row.customer_po_number),
+    customerPoDate:String(row.customer_po_date),status:String(row.status),currency:String(row.currency),orderTotal:String(row.order_total),
+    quotationId:dbId(row.quotation_id),quoteNo:String(row.quote_no),revisionNo:Number(row.revision_no),dealTitle:String(row.deal_title),
+    createdAt:row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at)})),
+    nextCursor:rows.length>n&&last?dbId(last.id):null};
+}
+
+/** Detail always checks current Deal visibility before returning commercial data. */
+export async function getCustomerPurchaseOrder(db:Db,t:TenantContext,orderId:string){
+  const [rows]=await db.execute<RowDataPacket[]>(`SELECT po.id,po.order_no,po.customer_po_number,DATE_FORMAT(po.customer_po_date,'%Y-%m-%d') AS customer_po_date,
+    po.received_at,po.created_at,po.status,po.currency,po.order_total,
+    q.id AS quotation_id,q.quote_no,q.deal_id,r.id AS revision_id,r.revision_no,r.subtotal,r.discount_total,r.tax_total,d.title AS deal_title
+    FROM crm_purchase_orders po
+    JOIN crm_quotation_revisions r ON r.company_id=po.company_id AND r.id=po.quotation_revision_id
+    JOIN crm_quotations q ON q.company_id=r.company_id AND q.id=r.quotation_id
+    JOIN deals d ON d.company_id=q.company_id AND d.id=q.deal_id
+    WHERE po.company_id=? AND po.id=? LIMIT 1`,[t.companyId,orderId]);
+  const row=rows[0];if(!row||!row.deal_id)throw AppError.notFound();
+  await visibleDeal(db,t,dbId(row.deal_id));
+  const [items]=await db.execute<RowDataPacket[]>(`SELECT description,quantity,unit_price,line_total FROM crm_purchase_order_items
+    WHERE company_id=? AND order_id=? ORDER BY id LIMIT 26`,[t.companyId,orderId]);
+  return {id:orderId,orderNo:String(row.order_no),customerPoNumber:String(row.customer_po_number),
+    customerPoDate:String(row.customer_po_date),receivedAt:row.received_at instanceof Date?row.received_at.toISOString():null,
+    status:String(row.status),currency:String(row.currency),orderTotal:String(row.order_total),
+    quotationId:dbId(row.quotation_id),quoteNo:String(row.quote_no),revisionNo:Number(row.revision_no),dealTitle:String(row.deal_title),
+    createdAt:row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at),
+    subtotal:String(row.subtotal),discountTotal:String(row.discount_total),taxTotal:String(row.tax_total),
+    items:items.map(x=>({description:String(x.description),quantity:String(x.quantity),unitPrice:String(x.unit_price),lineTotal:String(x.line_total)}))};
 }
